@@ -1,0 +1,21 @@
+@page "/logout"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using DiplomApp.Models
+@inject SignInManager<User> SignInManager
+@inject NavigationManager NavigationManager
+
+<PageTitle>Wylogowywanie</PageTitle>
+
+<div class="text-center">
+    <h3>Wylogowywanie...</h3>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await SignInManager.SignOutAsync();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+}

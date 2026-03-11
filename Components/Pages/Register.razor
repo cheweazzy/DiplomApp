@@ -1,0 +1,181 @@
+@page "/register"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using DiplomApp.Models
+@inject UserManager<User> UserManager
+@inject SignInManager<User> SignInManager
+@inject NavigationManager NavigationManager
+@inject IConfiguration Configuration
+
+<PageTitle>Rejestracja</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title text-center mb-4">Załóż Konto</h3>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <EditForm Model="model" OnValidSubmit="HandleRegistration">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" />
+
+                    <div class="mb-3">
+                        <label class="form-label">Imię i Nazwisko</label>
+                        <InputText class="form-control" @bind-Value="model.FullName" placeholder="Wpisz swoje imię i nazwisko" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <InputText class="form-control" type="email" @bind-Value="model.Email" placeholder="twoj.email@przyklad.pl" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Numer Telefonu</label>
+                        <InputText class="form-control" @bind-Value="model.PhoneNumber" placeholder="123456789" />
+                        <small class="form-text text-muted">Wpisz 9 cyfr (format polskie, bez kodu kraju)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Hasło</label>
+                        <InputText class="form-control" type="password" @bind-Value="model.Password" placeholder="Wpisz hasło" />
+                        <small class="form-text text-muted">Minimum 8 znaków, 1 duża litera, 1 cyfra, 1 znak specjalny</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Potwierdź Hasło</label>
+                        <InputText class="form-control" type="password" @bind-Value="model.ConfirmPassword" placeholder="Potwierdź hasło" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">type konta</label>
+                        <InputSelect class="form-select" @bind-Value="model.Role">
+                            <option value="Customer">Klient</option>
+                            <option value="Admin">Administrator</option>
+                            <option value="Employee">Pracownik</option>
+                        </InputSelect>
+                    </div>
+
+                    @if (model.Role == "Admin")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Klucz Rejestracji Administratora</label>
+                            <InputText class="form-control" type="password" @bind-Value="model.AdminKey" placeholder="Wpisz klucz rejestracji administratora" />
+                            <small class="form-text text-muted">Wymagany do rejestracji administratora</small>
+                        </div>
+                    }
+
+                    @if (model.Role == "Employee")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Klucz Rejestracji Pracownika</label>
+                            <InputText class="form-control" type="password" @bind-Value="model.EmployeeKey" placeholder="Wpisz klucz rejestracji pracownika" />
+                            <small class="form-text text-muted">Wymagany do rejestracji pracownika</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Specjalizacja</label>
+                            <InputSelect class="form-select" @bind-Value="model.EmployeeMedicalSpecialty">
+                                <option value="">-- Wybierz Specjalizację --</option>
+                                @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+                                {
+                                    <option value="@specialty">@specialty</option>
+                                }
+                            </InputSelect>
+                            <small class="form-text text-muted">Wymagana do rejestracji pracownika</small>
+                        </div>
+                    }
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Register
+                    </button>
+                </EditForm>
+
+                <div class="text-center mt-3">
+                    <p>Masz już konto? <a href="/login">Zaloguj się tutaj</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel model = new();
+    private string? errorMessage;
+    private bool isProcessing;
+
+    private async Task HandleRegistration()
+    {
+        errorMessage = null;
+        isProcessing = true;
+
+        try
+        {
+            // Validate admin key if registering as admin
+            if (model.Role == "Admin")
+            {
+                var adminKey = Configuration["AdminSettings:RegistrationKey"];
+                if (string.IsNullOrEmpty(model.AdminKey) || model.AdminKey != adminKey)
+                {
+                    errorMessage = "Invalid admin registration key.";
+                    return;
+                }
+            }
+
+            // Validate employee key if registering as employee
+            if (model.Role == "Employee")
+            {
+                var employeeKey = Configuration["EmployeeSettings:RegistrationKey"];
+                if (string.IsNullOrEmpty(model.EmployeeKey) || model.EmployeeKey != employeeKey)
+                {
+                    errorMessage = "Invalid employee registration key.";
+                    return;
+                }
+                
+                if (!model.EmployeeMedicalSpecialty.HasValue)
+                {
+                    errorMessage = "Medical specialty is required for employee registration.";
+                    return;
+                }
+            }
+
+            // Create user
+            var user = new User
+            {
+                UserName = model.Email,
+                Email = model.Email,
+                FullName = model.FullName,
+                PhoneNumber = model.PhoneNumber,
+                MedicalSpecialty = model.Role == "Employee" ? model.EmployeeMedicalSpecialty : null
+            };
+
+            var result = await UserManager.CreateAsync(user, model.Password);
+
+            if (result.Succeeded)
+            {
+                // Add user to role
+                await UserManager.AddToRoleAsync(user, model.Role);
+
+                // Redirect to login page
+                NavigationManager.NavigateTo($"/login?registered=true&email={Uri.EscapeDataString(model.Email)}");
+            }
+            else
+            {
+                errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}
+
+

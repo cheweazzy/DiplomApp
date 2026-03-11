@@ -1,0 +1,102 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@using DiplomApp.Models
+
+<PageTitle>Gabinet Lekarski</PageTitle>
+
+<div class="container">
+    <div class="text-center mb-5">
+        <h1 class="display-4 mb-3">Witamy w Gabinecie Lekarskim</h1>
+        <p class="lead">Profesjonalna opieka medyczna z doświadczonymi specjalistami</p>
+    </div>
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="alert alert-success">
+                <h4>Witamy z powrotem!</h4>
+                <p>Gotowi na umówienie wizyty?</p>
+                <a href="/reservations" class="btn btn-primary">Umów Wizytę Teraz</a>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="alert alert-info">
+                <h4>Zacznij Dziś!</h4>
+                <p>Utwórz konto, aby umówić pierwszą wizytę.</p>
+                <a href="/register" class="btn btn-primary me-2">Rejestracja</a>
+                <a href="/login" class="btn btn-outline-primary">Logowanie</a>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <div class="row mt-5">
+        <div class="col-md-12 mb-4">
+            <h2 class="mb-4">Nasi Specjaliści</h2>
+        </div>
+        
+        @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+        {
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">@specialty</h5>
+                        <p class="card-text">@GetSpecialtyDescription(specialty)</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title">Godziny Przyjęć</h3>
+                    <p class="card-text">
+                        Wizyty dostępne codziennie od <strong>8:00 do 20:00</strong><br/>
+                        Każda wizyta trwa <strong>30 minut</strong><br/>
+                        <small class="text-muted">Dostępne sloty co 30 minut (8:00, 8:30, 9:00, 9:30, itd.)</small>
+                    </p>
+                    <ul class="list-unstyled">
+                        <li>📅 8:00 - 8:30</li>
+                        <li>📅 8:30 - 9:00</li>
+                        <li>📅 9:00 - 9:30</li>
+                        <li>📅 9:30 - 10:00</li>
+                        <li>📅 ... i tak dalej do 19:30 - 20:00</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title">Dlaczego My?</h3>
+                    <ul>
+                        <li>Doświadczeni lekarze specjaliści</li>
+                        <li>Elastyczne terminy wizyt</li>
+                        <li>Różne specjalizacje medyczne</li>
+                        <li>Nowoczesny gabinet</li>
+                        <li>Kompleksowa opieka medyczna</li>
+                        <li>Łatwy system rezerwacji online</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string GetSpecialtyDescription(MedicalSpecialty specialty)
+    {
+        return specialty switch
+        {
+            MedicalSpecialty.Kardiolog => "Specjalista w zakresie chorób serca i układu krążenia. Diagnostyka i leczenie chorób kardiologicznych.",
+            MedicalSpecialty.Neurolog => "Specjalista w zakresie chorób układu nerwowego. Diagnostyka i leczenie schorzeń neurologicznych.",
+            MedicalSpecialty.Dermatolog => "Specjalista w zakresie chorób skóry, włosów i paznokci. Diagnostyka i leczenie schorzeń dermatologicznych.",
+            MedicalSpecialty.Ortopeda => "Specjalista w zakresie układu ruchu. Diagnostyka i leczenie urazów oraz schorzeń kości i stawów.",
+            MedicalSpecialty.Pediatra => "Specjalista w zakresie zdrowia dzieci. Opieka medyczna nad dziećmi i młodzieżą.",
+            MedicalSpecialty.Ginekolog => "Specjalista w zakresie zdrowia kobiet. Opieka ginekologiczna i położnicza.",
+            MedicalSpecialty.Internista => "Specjalista w zakresie chorób wewnętrznych. Kompleksowa diagnostyka i leczenie.",
+            _ => "Profesjonalna opieka medyczna."
+        };
+    }
+}

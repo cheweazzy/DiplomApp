@@ -1,0 +1,67 @@
+@page "/login"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@inject NavigationManager NavigationManager
+
+<PageTitle>Login</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title text-center mb-4">Login</h3>
+
+                @if (showRegistrationSuccess)
+                {
+                    <div class="alert alert-success">
+                        <strong>Registration successful!</strong> Please login with your credentials.
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <form method="post" action="/account/login">
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" value="@emailFromRegistration" placeholder="your.email@example.com" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" placeholder="Enter password" required />
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="rememberMe" id="rememberMe" />
+                        <label class="form-check-label" for="rememberMe">
+                            Remember me
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        Login
+                    </button>
+                </form>
+
+                <div class="text-center mt-3">
+                    <p>Don't have an account? <a href="/register">Register here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "registered")]
+    private bool showRegistrationSuccess { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? emailFromRegistration { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? errorMessage { get; set; }
+}

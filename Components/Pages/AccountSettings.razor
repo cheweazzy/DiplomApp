@@ -1,0 +1,239 @@
+@page "/account/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using DiplomApp.Models
+@using DiplomApp.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+
+<PageTitle>Ustawienia Konta</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Ustawienia Konta</h1>
+
+    <AuthorizeView Context="authContext">
+        <Authorized>
+            <div class="row">
+                <div class="col-lg-8">
+                    <!-- Account Information Card -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Informacje o koncie</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (currentUser != null)
+                            {
+                                <dl class="row">
+                                    <dt class="col-sm-4">Email:</dt>
+                                    <dd class="col-sm-8">@currentUser.Email</dd>
+
+                                    <dt class="col-sm-4">Imię i Nazwisko:</dt>
+                                    <dd class="col-sm-8">@(currentUser.FullName ?? "-")</dd>
+
+                                    <dt class="col-sm-4">Telefon:</dt>
+                                    <dd class="col-sm-8">@(currentUser.PhoneNumber ?? "-")</dd>
+
+                                    <dt class="col-sm-4">Specjalizacja:</dt>
+                                    <dd class="col-sm-8">
+                                        @if (currentUser.MedicalSpecialty.HasValue)
+                                        {
+                                            <span class="badge bg-info">@currentUser.MedicalSpecialty</span>
+                                        }
+                                        else
+                                        {
+                                            <span>-</span>
+                                        }
+                                    </dd>
+                                </dl>
+                            }
+                            else
+                            {
+                                <p><em>Ładowanie danych użytkownika...</em></p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Delete Account Card -->
+                    <div class="card mb-4 border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">Usuń konto (RODO/GDPR)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning">
+                                <h6><i class="bi bi-exclamation-triangle"></i> Uwaga: Ta operacja jest nieodwracalna</h6>
+                                <p class="mb-0">
+                                    Po usunięciu konta:
+                                </p>
+                                <ul class="mb-0">
+                                    <li>Twoje konto zostanie trwale usunięte z systemu</li>
+                                    <li>Wszystkie Twoje rezerwacje zostaną usunięte</li>
+                                    <li>Nie będziesz mógł się zalogować</li>
+                                    <li>Wszystkie dane osobowe zostaną usunięte zgodnie z RODO (GDPR) - "Prawo do bycia zapomnianym"</li>
+                                </ul>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(deleteAccountErrorMessage))
+                            {
+                                <div class="alert alert-danger">@deleteAccountErrorMessage</div>
+                            }
+
+                            <button class="btn btn-danger" @onclick="ShowDeleteAccountConfirmation" disabled="@isDeletingAccount">
+                                <i class="bi bi-trash"></i> Usuń moje konto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<!-- Delete Account Confirmation Modal -->
+@if (showDeleteAccountModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Potwierdź usunięcie konta</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteAccountModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Czy na pewno chcesz usunąć swoje konto?</strong></p>
+                    <p>Ta operacja jest nieodwracalna. Wszystkie Twoje dane i rezerwacje zostaną trwale usunięte.</p>
+                    
+                    <div class="alert alert-danger">
+                        <strong>Zgodnie z RODO/GDPR:</strong> To wykorzystuje Twoje "Prawo do bycia zapomnianym". 
+                        Wszystkie Twoje dane osobowe zostaną trwale usunięte z systemu.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Aby potwierdzić, wpisz <strong>USUŃ</strong>:</label>
+                        <input type="text" class="form-control" @bind="deleteConfirmationText" placeholder="Wpisz USUŃ" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteAccountModal">Anuluj</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteAccount" disabled="@(isDeletingAccount || deleteConfirmationText != "USUŃ")">
+                        @if (isDeletingAccount)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Tak, usuń moje konto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    [Inject]
+    private UserManager<User> UserManager { get; set; } = default!;
+
+    [Inject]
+    private IReservationService ReservationService { get; set; } = default!;
+
+    [Inject]
+    private SignInManager<User> SignInManager { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = default!;
+
+    private User? currentUser;
+    private string? currentUserId;
+
+    private bool showDeleteAccountModal = false;
+    private string deleteConfirmationText = "";
+    private bool isDeletingAccount = false;
+    private string? deleteAccountErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(currentUserId))
+            {
+                currentUser = await UserManager.FindByIdAsync(currentUserId);
+            }
+        }
+    }
+
+    private void ShowDeleteAccountConfirmation()
+    {
+        showDeleteAccountModal = true;
+        deleteConfirmationText = "";
+        deleteAccountErrorMessage = null;
+    }
+
+    private void CloseDeleteAccountModal()
+    {
+        showDeleteAccountModal = false;
+        deleteConfirmationText = "";
+        deleteAccountErrorMessage = null;
+    }
+
+    private async Task ConfirmDeleteAccount()
+    {
+        if (deleteConfirmationText != "USUŃ")
+        {
+            deleteAccountErrorMessage = "Wpisz dokładnie 'USUŃ' aby potwierdzić.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(currentUserId) || currentUser == null)
+        {
+            deleteAccountErrorMessage = "Nie można zidentyfikować użytkownika.";
+            return;
+        }
+
+        isDeletingAccount = true;
+        deleteAccountErrorMessage = null;
+
+        try
+        {
+            // Get all user reservations
+            var userReservations = await ReservationService.GetReservationsByUserAsync(currentUserId);
+
+            // Delete all reservations first (RODO - delete associated data)
+            foreach (var reservation in userReservations)
+            {
+                await ReservationService.DeleteAsync(reservation.Id);
+            }
+
+            // Delete user account (this will also delete Identity-related data)
+            var result = await UserManager.DeleteAsync(currentUser);
+
+            if (result.Succeeded)
+            {
+                // Sign out the user
+                await SignInManager.SignOutAsync();
+
+                // Redirect to home page
+                NavigationManager.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                deleteAccountErrorMessage = "Błąd podczas usuwania konta: " + string.Join(", ", result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            deleteAccountErrorMessage = $"Błąd podczas usuwania konta: {ex.Message}";
+        }
+        finally
+        {
+            isDeletingAccount = false;
+        }
+    }
+}
+

@@ -1,0 +1,374 @@
+@page "/reservations"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using DiplomApp.Models
+@using DiplomApp.Services
+@using DiplomApp.Helpers
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+
+<PageTitle>Umów Wizytę</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Umów Wizytę</h1>
+
+    <AuthorizeView Context="authContext">
+        <Authorized>
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">Make a Reservation</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="alert alert-danger">@errorMessage</div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(successMessage))
+                            {
+                                <div class="alert alert-success">@successMessage</div>
+                            }
+
+                            <EditForm Model="bookingModel" OnValidSubmit="HandleBooking" Context="editContext" FormName="bookingForm">
+                                <DataAnnotationsValidator />
+
+                                <div class="mb-3">
+                                    <label class="form-label">Specjalista *</label>
+                                    <InputSelect class="form-select" @bind-Value="bookingModel.MedicalSpecialty" @bind-Value:after="OnSpecialtyChanged">
+                                        <option value="">-- Wybierz Specjalistę --</option>
+                                        @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+                                        {
+                                            <option value="@specialty">@specialty</option>
+                                        }
+                                    </InputSelect>
+                                    <small class="form-text text-muted">Najpierw wybierz specjalistę, aby zobaczyć dostępne terminy</small>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Wybierz Datę</label>
+                                        <InputDate class="form-control" @bind-Value="bookingModel.SelectedDate" @bind-Value:after="OnDateChanged" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Dostępne Terminy</label>
+                                        @if (availableSlots == null)
+                                        {
+                                            <p class="text-muted"><em>Ładowanie terminów...</em></p>
+                                        }
+                                        else if (availableSlots.Count == 0)
+                                        {
+                                            <div class="alert alert-warning">
+                                                Brak dostępnych terminów dla wybranej specjalizacji w tym dniu. 
+                                                Spróbuj wybrać inny dzień lub specjalistę.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="row g-2">
+                                                @foreach (var slot in availableSlots)
+                                                {
+                                                    <div class="col-md-6 col-lg-4">
+                                                        <button type="button" 
+                                                                class="btn w-100 @(bookingModel.SelectedSlot == slot ? "btn-success" : "btn-outline-success")"
+                                                                @onclick="() => SelectSlot(slot)">
+                                                            @TimeSlotHelper.Format30MinuteTimeSlot(slot)
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> Wybierz specjalistę, aby zobaczyć dostępne terminy wizyt.
+                                    </div>
+                                }
+
+                                @if (bookingModel.SelectedSlot.HasValue)
+                                {
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Imię i Nazwisko</label>
+                                        <InputText class="form-control" @bind-Value="bookingModel.Name" placeholder="Imię i Nazwisko" />
+                                        <small class="form-text text-muted">Wypełnione automatycznie z profilu</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Email</label>
+                                        <InputText class="form-control" type="email" @bind-Value="bookingModel.Email" placeholder="twoj.email@example.com" />
+                                        <small class="form-text text-muted">Wypełnione automatycznie z profilu</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Numer Telefonu</label>
+                                        <InputText class="form-control" @bind-Value="bookingModel.PhoneNumber" placeholder="+48123456789" />
+                                        <small class="form-text text-muted">Wypełnione automatycznie z profilu</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Uwagi (Opcjonalnie)</label>
+                                        <InputTextArea class="form-control" @bind-Value="bookingModel.Notes" rows="3" />
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary w-100" disabled="@isProcessing">
+                                        @if (isProcessing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        Umów Wizytę
+                                    </button>
+                                }
+                            </EditForm>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0">Moje Wizyty</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (myReservations == null)
+                            {
+                                <p><em>Ładowanie...</em></p>
+                            }
+                            else if (myReservations.Count == 0)
+                            {
+                                <p class="text-muted">Nie masz jeszcze żadnych wizyt.</p>
+                            }
+                            else
+                            {
+                                <div class="list-group">
+                                    @foreach (var reservation in myReservations)
+                                    {
+                                        var isUpcoming = reservation.ReservationDateTime > DateTime.Now;
+                                        <div class="list-group-item @(isUpcoming ? "border-primary" : "")">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">
+                                                        <span class="badge bg-info me-2">@reservation.MedicalSpecialty</span>
+                                                        @if (isUpcoming)
+                                                        {
+                                                            <span class="badge bg-success">Nadchodząca</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">Zakończona</span>
+                                                        }
+                                                    </h6>
+                                                    <p class="mb-1">
+                                                        <strong>@reservation.ReservationDateTime.ToString("dddd, dd MMMM yyyy", new System.Globalization.CultureInfo("pl-PL"))</strong><br />
+                                                        <span class="text-muted">@TimeSlotHelper.Format30MinuteTimeSlot(reservation.ReservationDateTime)</span>
+                                                    </p>
+                                                    @if (!string.IsNullOrEmpty(reservation.Notes))
+                                                    {
+                                                        <small class="text-muted">Uwagi: @reservation.Notes</small>
+                                                    }
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelReservation(reservation.Id)">
+                                                    Anuluj
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="alert alert-info">
+                <h4>Zaloguj się, aby umówić wizytę</h4>
+                <p>Musisz być zalogowany, aby umówić wizytę u specjalisty.</p>
+                <a href="/login" class="btn btn-primary">Logowanie</a>
+                <a href="/register" class="btn btn-outline-primary">Rejestracja</a>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    [Inject]
+    private IReservationService ReservationService { get; set; } = default!;
+
+    [Inject]
+    private UserManager<User> UserManager { get; set; } = default!;
+
+    private BookingModel bookingModel = new() { SelectedDate = DateTime.Today.AddDays(1) };
+    private List<Reservation>? myReservations;
+    private List<DateTime>? availableSlots;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isProcessing;
+    private string? currentUserId;
+    private User? currentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            
+            if (!string.IsNullOrEmpty(currentUserId))
+            {
+                await LoadCurrentUser();
+                await LoadUserReservations();
+                // Don't load slots until specialty is selected
+                availableSlots = new List<DateTime>();
+            }
+        }
+    }
+
+    private async Task OnSpecialtyChanged()
+    {
+        bookingModel.SelectedSlot = null;
+        bookingModel.SelectedDate = DateTime.Today.AddDays(1); // Reset to tomorrow
+        await LoadAvailableSlots();
+    }
+
+    private async Task OnDateChanged()
+    {
+        bookingModel.SelectedSlot = null;
+        await LoadAvailableSlots();
+    }
+
+    private async Task LoadAvailableSlots()
+    {
+        if (string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+        {
+            availableSlots = new List<DateTime>();
+            return;
+        }
+
+        var specialty = Enum.Parse<MedicalSpecialty>(bookingModel.MedicalSpecialty);
+        availableSlots = await ReservationService.GetAvailableTimeSlotsAsync(bookingModel.SelectedDate, specialty);
+    }
+
+    private void SelectSlot(DateTime slot)
+    {
+        bookingModel.SelectedSlot = slot;
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        if (string.IsNullOrEmpty(currentUserId))
+            return;
+
+        currentUser = await UserManager.FindByIdAsync(currentUserId);
+        
+        if (currentUser != null)
+        {
+            // Автоматически заполняем поля формы данными пользователя
+            bookingModel.Name = currentUser.FullName ?? currentUser.UserName ?? "";
+            bookingModel.Email = currentUser.Email ?? "";
+            bookingModel.PhoneNumber = currentUser.PhoneNumber ?? "";
+        }
+    }
+
+    private async Task LoadUserReservations()
+    {
+        if (string.IsNullOrEmpty(currentUserId))
+            return;
+
+        var reservations = await ReservationService.GetReservationsByUserAsync(currentUserId);
+        myReservations = reservations.ToList();
+    }
+
+    private async Task HandleBooking()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isProcessing = true;
+
+        try
+        {
+            if (!bookingModel.SelectedSlot.HasValue)
+            {
+                errorMessage = "Proszę wybrać termin wizyty.";
+                return;
+            }
+
+            if (string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+            {
+                errorMessage = "Proszę wybrać specjalistę.";
+                return;
+            }
+
+            var reservation = new Reservation
+            {
+                UserId = currentUserId!,
+                Name = bookingModel.Name,
+                Email = bookingModel.Email,
+                PhoneNumber = bookingModel.PhoneNumber,
+                ReservationDateTime = bookingModel.SelectedSlot.Value,
+                MedicalSpecialty = Enum.Parse<MedicalSpecialty>(bookingModel.MedicalSpecialty),
+                Notes = bookingModel.Notes
+            };
+
+            await ReservationService.CreateAsync(reservation);
+            
+            successMessage = "Wizyta została pomyślnie umówiona!";
+            bookingModel = new() { SelectedDate = DateTime.Today.AddDays(1) };
+            
+            await LoadUserReservations();
+            await LoadAvailableSlots();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task CancelReservation(Guid id)
+    {
+        try
+        {
+            if (await ReservationService.DeleteAsync(id))
+            {
+                successMessage = "Wizyta została anulowana.";
+                await LoadUserReservations();
+                await LoadAvailableSlots();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            successMessage = null;
+        }
+    }
+
+    private class BookingModel
+    {
+        public DateTime SelectedDate { get; set; }
+        public DateTime? SelectedSlot { get; set; }
+        public string MedicalSpecialty { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? Notes { get; set; }
+    }
+}
+
+
+
+

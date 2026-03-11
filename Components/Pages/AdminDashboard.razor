@@ -1,0 +1,1258 @@
+@page "/admin"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+
+@using DiplomApp.Models
+@using DiplomApp.Services
+@using DiplomApp.Helpers
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using System.Security.Claims
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Admin Dashboard</h1>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Wszystkie Wizyty</h5>
+                    <h2 class="text-primary">@(allReservations?.Count ?? 0)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Nadchodzące</h5>
+                    <h2 class="text-success">@upcomingCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Przeszłe</h5>
+                    <h2 class="text-secondary">@pastCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Najpopularniejsza</h5>
+                    <h2 class="text-info">@mostPopularSpecialty</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Użytkownicy</h5>
+                    <h2 class="text-warning">@(allUsers?.Count ?? 0)</h2>
+                    <small class="text-muted">Admin: @adminCount | Employee: @employeeCount | Customer: @customerCount</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Pracownicy</h5>
+                    <h2 class="text-danger">@employeeCount</h2>
+                    <small class="text-muted">Lekarze w systemie</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "reservations" ? "active" : "")" @onclick='() => SetActiveTab("reservations")'>
+                Rezerwacje
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "users" ? "active" : "")" @onclick='() => SetActiveTab("users")'>
+                Zarządzanie Użytkownikami
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "availability" ? "active" : "")" @onclick='() => SetActiveTab("availability")'>
+                Dostępność Lekarzy
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "create-reservation" ? "active" : "")" @onclick='() => SetActiveTab("create-reservation")'>
+                Utwórz Rezerwację
+            </button>
+        </li>
+    </ul>
+
+    <!-- Reservations Tab -->
+    @if (activeTab == "reservations")
+    {
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Wszystkie Wizyty</h5>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadReservations">
+                <i class="bi bi-arrow-clockwise"></i> Odśwież
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Filtruj według Specjalisty</label>
+                    <select class="form-select" @bind="selectedMedicalSpecialty" @bind:after="ApplyFilters">
+                        <option value="">Wszyscy Specjaliści</option>
+                        @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+                        {
+                            <option value="@specialty">@specialty</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Od Daty</label>
+                    <input type="date" class="form-control" @bind="filterFromDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Do Daty</label>
+                    <input type="date" class="form-control" @bind="filterToDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Pokaż</label>
+                    <select class="form-select" @bind="timeFilter" @bind:after="ApplyFilters">
+                        <option value="all">Wszystkie</option>
+                        <option value="upcoming">Tylko Nadchodzące</option>
+                        <option value="past">Tylko Przeszłe</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (filteredReservations == null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else if (filteredReservations.Count == 0)
+            {
+                <div class="alert alert-info">Nie znaleziono wizyt.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Specjalista</th>
+                                <th>Imię i Nazwisko</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Notes</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reservation in filteredReservations.OrderBy(r => r.ReservationDateTime))
+                            {
+                                var isUpcoming = reservation.ReservationDateTime > DateTime.Now;
+                                <tr class="@(isUpcoming ? "table-primary" : "")">
+                                    <td>
+                                        <strong>@reservation.ReservationDateTime.ToString("dd.MM.yyyy")</strong><br />
+                                        <small>@TimeSlotHelper.Format30MinuteTimeSlot(reservation.ReservationDateTime)</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">@reservation.MedicalSpecialty</span>
+                                    </td>
+                                    <td>@reservation.Name</td>
+                                    <td>@reservation.Email</td>
+                                    <td>@reservation.PhoneNumber</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(reservation.Notes))
+                                        {
+                                            <small>@reservation.Notes</small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">-</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isUpcoming)
+                                        {
+                                            <span class="badge bg-success">Nadchodząca</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Zakończona</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteReservation(reservation.Id)">
+                                            Usuń
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+    }
+
+    <!-- Users Management Tab -->
+    @if (activeTab == "users")
+    {
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Zarządzanie Użytkownikami</h5>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadUsers">
+                <i class="bi bi-arrow-clockwise"></i> Odśwież
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">Filtruj według Roli</label>
+                    <select class="form-select" @bind="userRoleFilter" @bind:after="ApplyUserFilters">
+                        <option value="">Wszystkie Role</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Employee">Employee</option>
+                        <option value="Customer">Customer</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Szukaj (Email, Imię)</label>
+                    <input type="text" class="form-control" @bind="userSearchQuery" @bind:after="ApplyUserFilters" placeholder="Wpisz email lub imię..." />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Pokaż</label>
+                    <select class="form-select" @bind="userStatusFilter" @bind:after="ApplyUserFilters">
+                        <option value="all">Wszyscy</option>
+                        <option value="active">Aktywni</option>
+                        <option value="locked">Zablokowani</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (filteredUsers == null)
+            {
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Ładowanie...</span>
+                    </div>
+                </div>
+            }
+            else if (filteredUsers.Count == 0)
+            {
+                <div class="alert alert-info">Nie znaleziono użytkowników.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Imię i Nazwisko</th>
+                                <th>Telefon</th>
+                                <th>Rola</th>
+                                <th>Specjalizacja</th>
+                                <th>Status</th>
+                                <th>Data Rejestracji</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var userInfo in filteredUsers)
+                            {
+                                <tr>
+                                    <td>@userInfo.User.Email</td>
+                                    <td>@(userInfo.User.FullName ?? "-")</td>
+                                    <td>@(userInfo.User.PhoneNumber ?? "-")</td>
+                                    <td>
+                                        @foreach (var role in userInfo.Roles)
+                                        {
+                                            <span class="badge @(role == "Admin" ? "bg-danger" : role == "Employee" ? "bg-success" : "bg-primary")">@role</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (userInfo.User.MedicalSpecialty.HasValue)
+                                        {
+                                            <span class="badge bg-info">@userInfo.User.MedicalSpecialty</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (userInfo.User.LockoutEnd.HasValue && userInfo.User.LockoutEnd.Value > DateTimeOffset.UtcNow)
+                                        {
+                                            <span class="badge bg-danger">Zablokowany</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Aktywny</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <small>@(userInfo.User.LockoutEnd.HasValue ? "-" : DateTime.Now.ToString("dd.MM.yyyy"))</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowEditUserModal(userInfo.User.Id)" title="Edytuj rolę">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ShowDeleteUserModal(userInfo.User)" title="Usuń">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+    }
+
+    <!-- Availability Management Tab -->
+    @if (activeTab == "availability")
+    {
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Zarządzanie Dostępnością Lekarzy</h5>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadEmployees">
+                <i class="bi bi-arrow-clockwise"></i> Odśwież
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">Wybierz Lekarza</label>
+                    <select class="form-select" @bind="selectedDoctorId" @bind:after="OnDoctorSelected">
+                        <option value="">-- Wybierz Lekarza --</option>
+                        @foreach (var employee in allEmployees)
+                        {
+                            <option value="@employee.Id">@employee.FullName (@employee.Email) - @employee.MedicalSpecialty</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Wybierz Datę</label>
+                    <input type="date" class="form-control" @bind="availabilityDate" @bind:after="LoadAvailabilityForDate" 
+                           min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Pokaż</label>
+                    <select class="form-select" @bind="availabilityViewMode" @bind:after="LoadAvailabilityForDate">
+                        <option value="day">Dzień</option>
+                        <option value="week">Tydzień</option>
+                        <option value="month">Miesiąc</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(selectedDoctorId))
+            {
+                <div class="mb-3">
+                    <label class="form-label">Zaznacz dostępne godziny (co 30 minut)</label>
+                    <div class="row">
+                        @foreach (var slot in all30MinuteSlots)
+                        {
+                            var slotMinutes = TimeSlotHelper.DateTimeToMinutes(slot);
+                            var isSelected = selectedAvailabilitySlots.Contains(slotMinutes);
+                            <div class="col-md-3 col-sm-4 col-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           checked="@isSelected"
+                                           @onchange="@(() => ToggleAvailabilitySlot(slotMinutes))"
+                                           id="slot_@slotMinutes" />
+                                    <label class="form-check-label" for="slot_@slotMinutes">
+                                        @TimeSlotHelper.Format30MinuteTimeSlot(slot)
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="SaveAvailability" disabled="@isSavingAvailability">
+                        @if (isSavingAvailability)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Zapisz Dostępność
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ClearAvailabilitySelection">
+                        Wyczyść
+                    </button>
+                    <button class="btn btn-outline-danger" @onclick="DeleteAvailabilityForDate" disabled="@isDeletingAvailability">
+                        @if (isDeletingAvailability)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Usuń Dostępność dla Tego Dnia
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(availabilityMessage))
+                {
+                    <div class="alert @(availabilityMessageType == "success" ? "alert-success" : "alert-danger") mt-3">
+                        @availabilityMessage
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-info">Wybierz lekarza, aby zarządzać jego dostępnością.</div>
+            }
+        </div>
+    </div>
+    }
+
+    <!-- Create Reservation Tab -->
+    @if (activeTab == "create-reservation")
+    {
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Utwórz Rezerwację (Jako Administrator)</h5>
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrEmpty(createReservationErrorMessage))
+            {
+                <div class="alert alert-danger">@createReservationErrorMessage</div>
+            }
+            @if (!string.IsNullOrEmpty(createReservationSuccessMessage))
+            {
+                <div class="alert alert-success">@createReservationSuccessMessage</div>
+            }
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Wybierz Użytkownika *</label>
+                    <select class="form-select" @bind="selectedUserIdForReservation" @bind:after="OnUserSelectedForReservation">
+                        <option value="">-- Wybierz Użytkownika --</option>
+                        @if (allUsers != null)
+                        {
+                            @foreach (var userInfo in allUsers.Where(u => u.Roles.Contains("Customer") || u.Roles.Contains("Employee") || u.Roles.Contains("Admin")))
+                            {
+                                <option value="@userInfo.User.Id">@userInfo.User.FullName (@userInfo.User.Email)</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Specjalista *</label>
+                    <select class="form-select" @bind="createReservationSpecialty" @bind:after="OnSpecialtyChangedForReservation">
+                        <option value="">-- Wybierz Specjalistę --</option>
+                        @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+                        {
+                            <option value="@specialty">@specialty</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(createReservationSpecialty))
+            {
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Wybierz Datę</label>
+                        <input type="date" class="form-control" @bind="createReservationDate" @bind:after="OnDateChangedForReservation" />
+                    </div>
+                </div>
+
+                @if (availableSlotsForReservation != null && availableSlotsForReservation.Count > 0)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Dostępne Terminy</label>
+                        <div class="row g-2">
+                            @foreach (var slot in availableSlotsForReservation)
+                            {
+                                <div class="col-md-3">
+                                    <button type="button" 
+                                            class="btn w-100 @(selectedSlotForReservation == slot ? "btn-success" : "btn-outline-success")"
+                                            @onclick="() => SelectSlotForReservation(slot)">
+                                        @TimeSlotHelper.Format30MinuteTimeSlot(slot)
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (selectedSlotForReservation.HasValue)
+                {
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Uwagi (opcjonalnie)</label>
+                            <textarea class="form-control" @bind="createReservationNotes" rows="3" placeholder="Dodatkowe informacje o rezerwacji..."></textarea>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" @onclick="CreateReservationAsAdmin" disabled="@isCreatingReservation">
+                        @if (isCreatingReservation)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Utwórz Rezerwację
+                    </button>
+                }
+            }
+        </div>
+    </div>
+    }
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Wizyty według Specjalisty</h5>
+                </div>
+                <div class="card-body">
+                    @if (allReservations != null && allReservations.Count > 0)
+                    {
+                        var specialtyGroups = allReservations.GroupBy(r => r.MedicalSpecialty).OrderByDescending(g => g.Count());
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Specjalista</th>
+                                    <th>Liczba</th>
+                                    <th>Procent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var group in specialtyGroups)
+                                {
+                                    var percentage = (group.Count() * 100.0 / allReservations.Count);
+                                    <tr>
+                                        <td>@group.Key</td>
+                                        <td>@group.Count()</td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar" role="progressbar" style="width: @(percentage)%">
+                                                    @percentage.ToString("F1")%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Brak danych</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Nadchodzące Wizyty</h5>
+                </div>
+                <div class="card-body">
+                    @if (allReservations != null)
+                    {
+                        var upcoming = allReservations
+                            .Where(r => r.ReservationDateTime > DateTime.Now)
+                            .OrderBy(r => r.ReservationDateTime)
+                            .Take(10)
+                            .ToList();
+
+                        if (upcoming.Any())
+                        {
+                            <div class="list-group">
+                                @foreach (var reservation in upcoming)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <strong>@reservation.ReservationDateTime.ToString("ddd, dd.MM.yyyy")</strong>
+                                                <span class="ms-2">@TimeSlotHelper.Format30MinuteTimeSlot(reservation.ReservationDateTime)</span>
+                                            </div>
+                                            <span class="badge bg-info">@reservation.MedicalSpecialty</span>
+                                        </div>
+                                        <small class="text-muted">@reservation.Name</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Brak nadchodzących wizyt</p>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+@if (showEditUserModal && editingUser != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edytuj Rolę Użytkownika</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditUserModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Użytkownik:</strong> @editingUser.Email</p>
+                    <p><strong>Imię i Nazwisko:</strong> @(editingUser.FullName ?? "-")</p>
+                    <div class="mb-3">
+                        <label class="form-label">Rola</label>
+                        <select class="form-select" @bind="editingUserRole">
+                            <option value="Customer">Customer</option>
+                            <option value="Employee">Employee</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                    @if (editingUserRole == "Employee")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Specjalizacja Medyczna</label>
+                            <select class="form-select" @bind="editingUserSpecialty">
+                                <option value="">-- Wybierz Specjalizację --</option>
+                                @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
+                                {
+                                    <option value="@specialty">@specialty</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(userEditMessage))
+                    {
+                        <div class="alert @(userEditMessageType == "success" ? "alert-success" : "alert-danger")">
+                            @userEditMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditUserModal">Anuluj</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveUserRole" disabled="@isSavingUserRole">
+                        @if (isSavingUserRole)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Zapisz
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete User Modal -->
+@if (showDeleteUserModal && userToDelete != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Potwierdź Usunięcie Użytkownika</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteUserModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Czy na pewno chcesz usunąć tego użytkownika?</p>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Email:</strong> @userToDelete.Email</p>
+                            <p class="mb-1"><strong>Imię i Nazwisko:</strong> @(userToDelete.FullName ?? "-")</p>
+                            <p class="mb-0"><strong>Telefon:</strong> @(userToDelete.PhoneNumber ?? "-")</p>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle"></i> Ta operacja jest nieodwracalna. Wszystkie rezerwacje tego użytkownika również zostaną usunięte.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteUserModal">Anuluj</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteUser" disabled="@isDeletingUser">
+                        @if (isDeletingUser)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Tak, usuń użytkownika
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Inject]
+    private IReservationService ReservationService { get; set; } = default!;
+    
+    [Inject]
+    private IDoctorAvailabilityService DoctorAvailabilityService { get; set; } = default!;
+    
+    [Inject]
+    private UserManager<User> UserManager { get; set; } = default!;
+    
+    [Inject]
+    private RoleManager<IdentityRole> RoleManager { get; set; } = default!;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private List<Reservation>? allReservations;
+    private List<Reservation>? filteredReservations;
+    private string? currentAdminUserId;
+    
+    private string selectedMedicalSpecialty = "";
+    private DateTime? filterFromDate;
+    private DateTime? filterToDate;
+    private string timeFilter = "all";
+    
+    // Tab management
+    private string activeTab = "reservations";
+    
+    // User management
+    private List<UserInfo>? allUsers;
+    private List<UserInfo>? filteredUsers;
+    private string userRoleFilter = "";
+    private string userSearchQuery = "";
+    private string userStatusFilter = "all";
+    
+    private bool showEditUserModal = false;
+    private bool showDeleteUserModal = false;
+    private User? editingUser;
+    private User? userToDelete;
+    private string editingUserRole = "";
+    private MedicalSpecialty? editingUserSpecialty;
+    private bool isSavingUserRole = false;
+    private bool isDeletingUser = false;
+    private string? userEditMessage;
+    private string userEditMessageType = "success";
+    
+    // Availability management
+    private List<User> allEmployees = new();
+    private string? selectedDoctorId;
+    private DateTime availabilityDate = DateTime.Today;
+    private List<DateTime> all30MinuteSlots = new();
+    private HashSet<int> selectedAvailabilitySlots = new();
+    private bool isSavingAvailability = false;
+    private bool isDeletingAvailability = false;
+    private string? availabilityMessage;
+    private string availabilityMessageType = "success";
+    private string availabilityViewMode = "day";
+    
+    // Create reservation
+    private string? selectedUserIdForReservation;
+    private string createReservationSpecialty = "";
+    private DateTime createReservationDate = DateTime.Today.AddDays(1);
+    private DateTime? selectedSlotForReservation;
+    private List<DateTime>? availableSlotsForReservation;
+    private string? createReservationNotes;
+    private bool isCreatingReservation = false;
+    private string? createReservationErrorMessage;
+    private string? createReservationSuccessMessage;
+    
+    private class UserInfo
+    {
+        public User User { get; set; } = default!;
+        public List<string> Roles { get; set; } = new();
+    }
+
+    private int upcomingCount => allReservations?.Count(r => r.ReservationDateTime > DateTime.Now) ?? 0;
+    private int pastCount => allReservations?.Count(r => r.ReservationDateTime <= DateTime.Now) ?? 0;
+    private int adminCount => allUsers?.Count(u => u.Roles.Contains("Admin")) ?? 0;
+    private int employeeCount => allUsers?.Count(u => u.Roles.Contains("Employee")) ?? 0;
+    private int customerCount => allUsers?.Count(u => u.Roles.Contains("Customer")) ?? 0;
+    private string mostPopularSpecialty
+    {
+        get
+        {
+            if (allReservations == null || allReservations.Count == 0)
+                return "Brak";
+            
+            return allReservations
+                .GroupBy(r => r.MedicalSpecialty)
+                .OrderByDescending(g => g.Count())
+                .First()
+                .Key
+                .ToString();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            currentAdminUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        await LoadReservations();
+        await LoadUsers();
+        await LoadEmployees();
+        InitializeAvailabilitySlots();
+    }
+    
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+    }
+    
+    private void InitializeAvailabilitySlots()
+    {
+        all30MinuteSlots = TimeSlotHelper.GetTimeSlots30MinutesForDate(DateTime.Today);
+    }
+
+    private async Task LoadReservations()
+    {
+        var reservations = await ReservationService.GetAllAsync();
+        allReservations = reservations.ToList();
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (allReservations == null)
+        {
+            filteredReservations = new List<Reservation>();
+            return;
+        }
+
+        var filtered = allReservations.AsEnumerable();
+
+        // Filter by medical specialty
+        if (!string.IsNullOrEmpty(selectedMedicalSpecialty))
+        {
+            filtered = filtered.Where(r => r.MedicalSpecialty.ToString() == selectedMedicalSpecialty);
+        }
+
+        // Filter by date range
+        if (filterFromDate.HasValue)
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime.Date >= filterFromDate.Value.Date);
+        }
+
+        if (filterToDate.HasValue)
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime.Date <= filterToDate.Value.Date);
+        }
+
+        // Filter by time (upcoming/past)
+        if (timeFilter == "upcoming")
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime > DateTime.Now);
+        }
+        else if (timeFilter == "past")
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime <= DateTime.Now);
+        }
+
+        filteredReservations = filtered.ToList();
+    }
+
+    private async Task DeleteReservation(Guid id)
+    {
+        // Przekazujemy userId admina, aby serwis mógł sprawdzić rolę i pominąć limit 12h
+        if (await ReservationService.DeleteAsync(id, currentAdminUserId))
+        {
+            await LoadReservations();
+        }
+    }
+    
+    // User Management Methods
+    private async Task LoadUsers()
+    {
+        var users = UserManager.Users.ToList();
+        var userInfos = new List<UserInfo>();
+        
+        foreach (var user in users)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            userInfos.Add(new UserInfo
+            {
+                User = user,
+                Roles = roles.ToList()
+            });
+        }
+        
+        allUsers = userInfos;
+        ApplyUserFilters();
+    }
+    
+    private void ApplyUserFilters()
+    {
+        if (allUsers == null)
+        {
+            filteredUsers = new List<UserInfo>();
+            return;
+        }
+        
+        var filtered = allUsers.AsEnumerable();
+        
+        if (!string.IsNullOrEmpty(userRoleFilter))
+        {
+            filtered = filtered.Where(u => u.Roles.Contains(userRoleFilter));
+        }
+        
+        if (!string.IsNullOrWhiteSpace(userSearchQuery))
+        {
+            var query = userSearchQuery.ToLowerInvariant();
+            filtered = filtered.Where(u => 
+                (u.User.Email != null && u.User.Email.ToLowerInvariant().Contains(query)) ||
+                (u.User.FullName != null && u.User.FullName.ToLowerInvariant().Contains(query))
+            );
+        }
+        
+        if (userStatusFilter == "active")
+        {
+            filtered = filtered.Where(u => !u.User.LockoutEnd.HasValue || u.User.LockoutEnd.Value <= DateTimeOffset.UtcNow);
+        }
+        else if (userStatusFilter == "locked")
+        {
+            filtered = filtered.Where(u => u.User.LockoutEnd.HasValue && u.User.LockoutEnd.Value > DateTimeOffset.UtcNow);
+        }
+        
+        filteredUsers = filtered.ToList();
+    }
+    
+    private async Task ShowEditUserModal(string userId)
+    {
+        editingUser = await UserManager.FindByIdAsync(userId);
+        if (editingUser != null)
+        {
+            var roles = await UserManager.GetRolesAsync(editingUser);
+            editingUserRole = roles.FirstOrDefault() ?? "Customer";
+            editingUserSpecialty = editingUser.MedicalSpecialty;
+            userEditMessage = null;
+            showEditUserModal = true;
+        }
+    }
+    
+    private void CloseEditUserModal()
+    {
+        showEditUserModal = false;
+        editingUser = null;
+        userEditMessage = null;
+    }
+    
+    private async Task SaveUserRole()
+    {
+        if (editingUser == null) return;
+        
+        isSavingUserRole = true;
+        userEditMessage = null;
+        
+        try
+        {
+            // Remove all current roles
+            var currentRoles = await UserManager.GetRolesAsync(editingUser);
+            await UserManager.RemoveFromRolesAsync(editingUser, currentRoles);
+            
+            // Add new role
+            await UserManager.AddToRoleAsync(editingUser, editingUserRole);
+            
+            // Update medical specialty if Employee
+            if (editingUserRole == "Employee" && editingUserSpecialty.HasValue)
+            {
+                editingUser.MedicalSpecialty = editingUserSpecialty;
+            }
+            else if (editingUserRole != "Employee")
+            {
+                editingUser.MedicalSpecialty = null;
+            }
+            
+            await UserManager.UpdateAsync(editingUser);
+            
+            userEditMessage = "Rola użytkownika została zaktualizowana pomyślnie.";
+            userEditMessageType = "success";
+            
+            await LoadUsers();
+            
+            // Close modal after a short delay
+            await Task.Delay(1500);
+            CloseEditUserModal();
+        }
+        catch (Exception ex)
+        {
+            userEditMessage = $"Błąd podczas aktualizacji roli: {ex.Message}";
+            userEditMessageType = "danger";
+        }
+        finally
+        {
+            isSavingUserRole = false;
+        }
+    }
+    
+    private void ShowDeleteUserModal(User user)
+    {
+        userToDelete = user;
+        showDeleteUserModal = true;
+    }
+    
+    private void CloseDeleteUserModal()
+    {
+        showDeleteUserModal = false;
+        userToDelete = null;
+    }
+    
+    private async Task ConfirmDeleteUser()
+    {
+        if (userToDelete == null) return;
+        
+        isDeletingUser = true;
+        
+        try
+        {
+            // Delete all user reservations first (RODO - delete associated data)
+            // Używamy userId admina, aby pominąć limit 12h przy usuwaniu
+            var userReservations = await ReservationService.GetReservationsByUserAsync(userToDelete.Id);
+            foreach (var reservation in userReservations)
+            {
+                await ReservationService.DeleteAsync(reservation.Id, currentAdminUserId);
+            }
+
+            // Delete user account (this will also delete Identity-related data)
+            var result = await UserManager.DeleteAsync(userToDelete);
+            if (result.Succeeded)
+            {
+                await LoadUsers();
+                CloseDeleteUserModal();
+            }
+        }
+        finally
+        {
+            isDeletingUser = false;
+        }
+    }
+    
+    // Availability Management Methods
+    private Task LoadEmployees()
+    {
+        var users = UserManager.Users.Where(u => u.MedicalSpecialty.HasValue).ToList();
+        allEmployees = users;
+        return Task.CompletedTask;
+    }
+    
+    private async Task OnDoctorSelected()
+    {
+        await LoadAvailabilityForDate();
+    }
+    
+    private async Task LoadAvailabilityForDate()
+    {
+        if (string.IsNullOrEmpty(selectedDoctorId))
+        {
+            selectedAvailabilitySlots.Clear();
+            return;
+        }
+        
+        availabilityMessage = null;
+        selectedAvailabilitySlots.Clear();
+        
+        var availability = await DoctorAvailabilityService.GetAvailabilityAsync(selectedDoctorId, availabilityDate);
+        if (availability != null)
+        {
+            var slotsJson = availability.AvailableSlots;
+            if (!string.IsNullOrEmpty(slotsJson))
+            {
+                var slots = System.Text.Json.JsonSerializer.Deserialize<List<int>>(slotsJson);
+                if (slots != null)
+                {
+                    selectedAvailabilitySlots = new HashSet<int>(slots);
+                }
+            }
+        }
+    }
+    
+    private void ToggleAvailabilitySlot(int slotMinutes)
+    {
+        if (selectedAvailabilitySlots.Contains(slotMinutes))
+        {
+            selectedAvailabilitySlots.Remove(slotMinutes);
+        }
+        else
+        {
+            selectedAvailabilitySlots.Add(slotMinutes);
+        }
+    }
+    
+    private async Task SaveAvailability()
+    {
+        if (string.IsNullOrEmpty(selectedDoctorId))
+        {
+            availabilityMessage = "Wybierz lekarza.";
+            availabilityMessageType = "danger";
+            return;
+        }
+        
+        isSavingAvailability = true;
+        availabilityMessage = null;
+        
+        try
+        {
+            var slotsList = selectedAvailabilitySlots.OrderBy(s => s).ToList();
+            await DoctorAvailabilityService.SaveAvailabilityAsync(selectedDoctorId, availabilityDate, slotsList);
+            availabilityMessage = $"Dostępność dla {availabilityDate:dd.MM.yyyy} została zapisana pomyślnie!";
+            availabilityMessageType = "success";
+        }
+        catch (Exception ex)
+        {
+            availabilityMessage = $"Błąd podczas zapisywania dostępności: {ex.Message}";
+            availabilityMessageType = "danger";
+        }
+        finally
+        {
+            isSavingAvailability = false;
+        }
+    }
+    
+    private void ClearAvailabilitySelection()
+    {
+        selectedAvailabilitySlots.Clear();
+        availabilityMessage = null;
+    }
+    
+    private async Task DeleteAvailabilityForDate()
+    {
+        if (string.IsNullOrEmpty(selectedDoctorId))
+        {
+            availabilityMessage = "Wybierz lekarza.";
+            availabilityMessageType = "danger";
+            return;
+        }
+        
+        isDeletingAvailability = true;
+        availabilityMessage = null;
+        
+        try
+        {
+            var deleted = await DoctorAvailabilityService.DeleteAvailabilityAsync(selectedDoctorId, availabilityDate);
+            if (deleted)
+            {
+                availabilityMessage = $"Dostępność dla {availabilityDate:dd.MM.yyyy} została usunięta.";
+                availabilityMessageType = "success";
+                selectedAvailabilitySlots.Clear();
+            }
+            else
+            {
+                availabilityMessage = "Nie znaleziono dostępności do usunięcia dla wybranego dnia.";
+                availabilityMessageType = "danger";
+            }
+        }
+        catch (Exception ex)
+        {
+            availabilityMessage = $"Błąd podczas usuwania dostępności: {ex.Message}";
+            availabilityMessageType = "danger";
+        }
+        finally
+        {
+            isDeletingAvailability = false;
+        }
+    }
+    
+    // Create Reservation Methods
+    private Task OnUserSelectedForReservation()
+    {
+        // Reset form when user changes
+        selectedSlotForReservation = null;
+        availableSlotsForReservation = null;
+        createReservationErrorMessage = null;
+        createReservationSuccessMessage = null;
+        return Task.CompletedTask;
+    }
+    
+    private async Task OnSpecialtyChangedForReservation()
+    {
+        selectedSlotForReservation = null;
+        await LoadAvailableSlotsForReservation();
+    }
+    
+    private async Task OnDateChangedForReservation()
+    {
+        selectedSlotForReservation = null;
+        await LoadAvailableSlotsForReservation();
+    }
+    
+    private async Task LoadAvailableSlotsForReservation()
+    {
+        if (string.IsNullOrEmpty(createReservationSpecialty))
+        {
+            availableSlotsForReservation = new List<DateTime>();
+            return;
+        }
+        
+        var specialty = Enum.Parse<MedicalSpecialty>(createReservationSpecialty);
+        availableSlotsForReservation = await ReservationService.GetAvailableTimeSlotsAsync(createReservationDate, specialty);
+    }
+    
+    private void SelectSlotForReservation(DateTime slot)
+    {
+        selectedSlotForReservation = slot;
+    }
+    
+    private async Task CreateReservationAsAdmin()
+    {
+        if (string.IsNullOrEmpty(selectedUserIdForReservation) || !selectedSlotForReservation.HasValue || string.IsNullOrEmpty(createReservationSpecialty))
+        {
+            createReservationErrorMessage = "Proszę wypełnić wszystkie wymagane pola.";
+            return;
+        }
+        
+        isCreatingReservation = true;
+        createReservationErrorMessage = null;
+        createReservationSuccessMessage = null;
+        
+        try
+        {
+            var user = await UserManager.FindByIdAsync(selectedUserIdForReservation);
+            if (user == null)
+            {
+                createReservationErrorMessage = "Użytkownik nie został znaleziony.";
+                return;
+            }
+            
+            var reservation = new Reservation
+            {
+                UserId = selectedUserIdForReservation,
+                Name = user.FullName ?? user.UserName ?? user.Email ?? "",
+                Email = user.Email ?? "",
+                PhoneNumber = user.PhoneNumber ?? "",
+                ReservationDateTime = selectedSlotForReservation.Value,
+                MedicalSpecialty = Enum.Parse<MedicalSpecialty>(createReservationSpecialty),
+                Notes = createReservationNotes
+            };
+            
+            await ReservationService.CreateAsync(reservation);
+            
+            createReservationSuccessMessage = $"Rezerwacja została pomyślnie utworzona dla użytkownika {user.FullName} ({user.Email}).";
+            
+            // Reset form
+            selectedSlotForReservation = null;
+            createReservationNotes = null;
+            await LoadAvailableSlotsForReservation();
+            await LoadReservations();
+        }
+        catch (Exception ex)
+        {
+            createReservationErrorMessage = $"Błąd podczas tworzenia rezerwacji: {ex.Message}";
+        }
+        finally
+        {
+            isCreatingReservation = false;
+        }
+    }
+}
+
+

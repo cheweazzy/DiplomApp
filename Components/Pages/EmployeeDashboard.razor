@@ -1,0 +1,633 @@
+@page "/employee"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Employee")]
+@using DiplomApp.Models
+@using DiplomApp.Services
+@using DiplomApp.Helpers
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+
+<PageTitle>Panel Pracownika</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Panel Pracownika - Zarządzanie Rezerwacjami</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Wszystkie Wizyty</h5>
+                    <h2 class="text-primary">@(allReservations?.Count ?? 0)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Nadchodzące</h5>
+                    <h2 class="text-success">@upcomingCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Dzisiaj</h5>
+                    <h2 class="text-info">@todayCount</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Availability Management Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Zarządzanie Dostępnością</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">Wybierz Datę</label>
+                    <input type="date" class="form-control" @bind="availabilityDate" @bind:after="LoadAvailabilityForDate" 
+                           min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Zaznacz dostępne godziny (co 30 minut)</label>
+                    <div class="row">
+                        @foreach (var slot in all30MinuteSlots)
+                        {
+                            var slotMinutes = TimeSlotHelper.DateTimeToMinutes(slot);
+                            var isSelected = selectedAvailabilitySlots.Contains(slotMinutes);
+                            <div class="col-md-3 col-sm-4 col-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           checked="@isSelected"
+                                           @onchange="@(() => ToggleAvailabilitySlot(slotMinutes))"
+                                           id="slot_@slotMinutes" />
+                                    <label class="form-check-label" for="slot_@slotMinutes">
+                                        @TimeSlotHelper.Format30MinuteTimeSlot(slot)
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" @onclick="SaveAvailability" disabled="@isSavingAvailability">
+                    @if (isSavingAvailability)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Zapisz Dostępność
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="ClearAvailabilitySelection">
+                    Wyczyść
+                </button>
+                <button class="btn btn-outline-danger" @onclick="DeleteAvailabilityForDate" disabled="@isDeletingAvailability">
+                    @if (isDeletingAvailability)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Usuń Dostępność dla Tego Dnia
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(availabilityMessage))
+            {
+                <div class="alert @(availabilityMessageType == "success" ? "alert-success" : "alert-danger") mt-3">
+                    @availabilityMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Zarządzanie Rezerwacjami</h5>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadReservations">
+                <i class="bi bi-arrow-clockwise"></i> Odśwież
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Szukaj pacjenta (imię, nazwisko, email, telefon)</label>
+                    <input type="text" class="form-control" @bind="searchQuery" @bind:after="ApplyFilters" 
+                           placeholder="Wpisz imię, nazwisko, email lub telefon..." />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Filtruj według Specjalisty</label>
+                    <select class="form-select" @bind="selectedMedicalSpecialty" @bind:after="ApplyFilters">
+                        <option value="">Wszystkie (moja specjalizacja)</option>
+                        @if (currentEmployeeSpecialty.HasValue)
+                        {
+                            <option value="@currentEmployeeSpecialty">@currentEmployeeSpecialty</option>
+                        }
+                    </select>
+                    <small class="text-muted">Wyświetlane są tylko rezerwacje dla specjalizacji: @(currentEmployeeSpecialty?.ToString() ?? "Brak przypisanej specjalizacji")</small>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Od Daty</label>
+                    <input type="date" class="form-control" @bind="filterFromDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Do Daty</label>
+                    <input type="date" class="form-control" @bind="filterToDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Pokaż</label>
+                    <select class="form-select" @bind="timeFilter" @bind:after="ApplyFilters">
+                        <option value="all">Wszystkie</option>
+                        <option value="upcoming">Tylko Nadchodzące</option>
+                        <option value="past">Tylko Przeszłe</option>
+                        <option value="today">Dzisiaj</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (filteredReservations == null)
+            {
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Ładowanie...</span>
+                    </div>
+                    <p class="mt-2"><em>Ładowanie rezerwacji...</em></p>
+                </div>
+            }
+            else if (filteredReservations.Count == 0)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Nie znaleziono rezerwacji spełniających kryteria wyszukiwania.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data i Godzina</th>
+                                <th>Specjalista</th>
+                                <th>Imię i Nazwisko</th>
+                                <th>Email</th>
+                                <th>Telefon</th>
+                                <th>Uwagi</th>
+                                <th>Status</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reservation in filteredReservations.OrderBy(r => r.ReservationDateTime))
+                            {
+                                var isUpcoming = reservation.ReservationDateTime > DateTime.Now;
+                                var isToday = reservation.ReservationDateTime.Date == DateTime.Today;
+                                <tr class="@(isToday ? "table-warning" : isUpcoming ? "table-primary" : "")">
+                                    <td>
+                                        <strong>@reservation.ReservationDateTime.ToString("dd.MM.yyyy")</strong><br />
+                                        <small class="text-muted">@TimeSlotHelper.Format30MinuteTimeSlot(reservation.ReservationDateTime)</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">@reservation.MedicalSpecialty</span>
+                                    </td>
+                                    <td>@reservation.Name</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(reservation.Email))
+                                        {
+                                            <a href="mailto:@reservation.Email">@reservation.Email</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(reservation.PhoneNumber))
+                                        {
+                                            <a href="tel:@reservation.PhoneNumber">@reservation.PhoneNumber</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(reservation.Notes))
+                                        {
+                                            <small title="@reservation.Notes">@(reservation.Notes.Length > 50 ? reservation.Notes.Substring(0, 50) + "..." : reservation.Notes)</small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">-</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isToday)
+                                        {
+                                            <span class="badge bg-warning">Dzisiaj</span>
+                                        }
+                                        else if (isUpcoming)
+                                        {
+                                            <span class="badge bg-success">Nadchodząca</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Zakończona</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                @onclick="() => ShowCancelConfirmation(reservation)" 
+                                                title="Anuluj rezerwację">
+                                            <i class="bi bi-x-circle"></i> Anuluj
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Nadchodzące Wizyty (Najbliższe 10)</h5>
+                </div>
+                <div class="card-body">
+                    @if (allReservations != null)
+                    {
+                        var upcoming = allReservations
+                            .Where(r => r.ReservationDateTime > DateTime.Now)
+                            .OrderBy(r => r.ReservationDateTime)
+                            .Take(10)
+                            .ToList();
+
+                        if (upcoming.Any())
+                        {
+                            <div class="list-group">
+                                @foreach (var reservation in upcoming)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>@reservation.ReservationDateTime.ToString("dd.MM.yyyy dddd")</strong>
+                                                <span class="ms-2">@TimeSlotHelper.Format30MinuteTimeSlot(reservation.ReservationDateTime)</span>
+                                                <span class="ms-2 badge bg-info">@reservation.MedicalSpecialty</span>
+                                            </div>
+                                            <div>
+                                                <span class="me-2">@reservation.Name</span>
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        @onclick="() => ShowCancelConfirmation(reservation)">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Brak nadchodzących wizyt</p>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Confirmation Modal -->
+@if (showCancelModal && reservationToCancel != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Potwierdź anulowanie rezerwacji</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCancelModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Czy na pewno chcesz anulować tę rezerwację?</p>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Data:</strong> @reservationToCancel.ReservationDateTime.ToString("dd.MM.yyyy HH:mm")</p>
+                            <p class="mb-1"><strong>Specjalista:</strong> @reservationToCancel.MedicalSpecialty</p>
+                            <p class="mb-1"><strong>Pacjent:</strong> @reservationToCancel.Name</p>
+                            @if (!string.IsNullOrEmpty(reservationToCancel.Email))
+                            {
+                                <p class="mb-0"><strong>Email:</strong> @reservationToCancel.Email</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCancelModal">Anuluj</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmCancelReservation" disabled="@isCancelling">
+                        @if (isCancelling)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Tak, anuluj rezerwację
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Inject]
+    private IReservationService ReservationService { get; set; } = default!;
+
+    [Inject]
+    private IDoctorAvailabilityService DoctorAvailabilityService { get; set; } = default!;
+
+    [Inject]
+    private UserManager<User> UserManager { get; set; } = default!;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private List<Reservation>? allReservations;
+    private List<Reservation>? filteredReservations;
+    
+    private string searchQuery = "";
+    private string selectedMedicalSpecialty = "";
+    private DateTime? filterFromDate;
+    private DateTime? filterToDate;
+    private string timeFilter = "all";
+
+    private bool showCancelModal = false;
+    private Reservation? reservationToCancel;
+    private bool isCancelling = false;
+
+    // Availability management
+    private DateTime availabilityDate = DateTime.Today;
+    private List<DateTime> all30MinuteSlots = new();
+    private HashSet<int> selectedAvailabilitySlots = new();
+    private bool isSavingAvailability = false;
+    private bool isDeletingAvailability = false;
+    private string? availabilityMessage;
+    private string availabilityMessageType = "success";
+    private string? currentDoctorId;
+    private User? currentEmployee;
+    private MedicalSpecialty? currentEmployeeSpecialty;
+
+    private int upcomingCount => allReservations?.Count(r => r.ReservationDateTime > DateTime.Now) ?? 0;
+    private int todayCount => allReservations?.Count(r => r.ReservationDateTime.Date == DateTime.Today) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            currentDoctorId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            
+            if (!string.IsNullOrEmpty(currentDoctorId))
+            {
+                currentEmployee = await UserManager.FindByIdAsync(currentDoctorId);
+                currentEmployeeSpecialty = currentEmployee?.MedicalSpecialty;
+            }
+        }
+
+        await LoadReservations();
+        InitializeAvailabilitySlots();
+        await LoadAvailabilityForDate();
+    }
+
+    private void InitializeAvailabilitySlots()
+    {
+        // Generate all 30-minute slots for display (8:00 - 19:30)
+        all30MinuteSlots = TimeSlotHelper.GetTimeSlots30MinutesForDate(DateTime.Today);
+    }
+
+    private async Task LoadAvailabilityForDate()
+    {
+        if (string.IsNullOrEmpty(currentDoctorId))
+            return;
+
+        availabilityMessage = null;
+        selectedAvailabilitySlots.Clear();
+
+        var availability = await DoctorAvailabilityService.GetAvailabilityAsync(currentDoctorId, availabilityDate);
+        if (availability != null)
+        {
+            // Deserialize available slots
+            var slotsJson = availability.AvailableSlots;
+            if (!string.IsNullOrEmpty(slotsJson))
+            {
+                var slots = System.Text.Json.JsonSerializer.Deserialize<List<int>>(slotsJson);
+                if (slots != null)
+                {
+                    selectedAvailabilitySlots = new HashSet<int>(slots);
+                }
+            }
+        }
+    }
+
+    private void ToggleAvailabilitySlot(int slotMinutes)
+    {
+        if (selectedAvailabilitySlots.Contains(slotMinutes))
+        {
+            selectedAvailabilitySlots.Remove(slotMinutes);
+        }
+        else
+        {
+            selectedAvailabilitySlots.Add(slotMinutes);
+        }
+    }
+
+    private async Task SaveAvailability()
+    {
+        if (string.IsNullOrEmpty(currentDoctorId))
+        {
+            availabilityMessage = "Błąd: Nie można zidentyfikować użytkownika.";
+            availabilityMessageType = "danger";
+            return;
+        }
+
+        isSavingAvailability = true;
+        availabilityMessage = null;
+
+        try
+        {
+            var slotsList = selectedAvailabilitySlots.OrderBy(s => s).ToList();
+            await DoctorAvailabilityService.SaveAvailabilityAsync(currentDoctorId, availabilityDate, slotsList);
+            availabilityMessage = $"Dostępność dla {availabilityDate:dd.MM.yyyy} została zapisana pomyślnie!";
+            availabilityMessageType = "success";
+        }
+        catch (Exception ex)
+        {
+            availabilityMessage = $"Błąd podczas zapisywania dostępności: {ex.Message}";
+            availabilityMessageType = "danger";
+        }
+        finally
+        {
+            isSavingAvailability = false;
+        }
+    }
+
+    private void ClearAvailabilitySelection()
+    {
+        selectedAvailabilitySlots.Clear();
+        availabilityMessage = null;
+    }
+
+    private async Task DeleteAvailabilityForDate()
+    {
+        if (string.IsNullOrEmpty(currentDoctorId))
+        {
+            availabilityMessage = "Błąd: Nie można zidentyfikować użytkownika.";
+            availabilityMessageType = "danger";
+            return;
+        }
+
+        isDeletingAvailability = true;
+        availabilityMessage = null;
+
+        try
+        {
+            var deleted = await DoctorAvailabilityService.DeleteAvailabilityAsync(currentDoctorId, availabilityDate);
+            if (deleted)
+            {
+                availabilityMessage = $"Dostępność dla {availabilityDate:dd.MM.yyyy} została usunięta.";
+                availabilityMessageType = "success";
+                selectedAvailabilitySlots.Clear();
+            }
+            else
+            {
+                availabilityMessage = "Nie znaleziono dostępności do usunięcia dla wybranego dnia.";
+                availabilityMessageType = "danger";
+            }
+        }
+        catch (Exception ex)
+        {
+            availabilityMessage = $"Błąd podczas usuwania dostępności: {ex.Message}";
+            availabilityMessageType = "danger";
+        }
+        finally
+        {
+            isDeletingAvailability = false;
+        }
+    }
+
+    private async Task LoadReservations()
+    {
+        // Employee widzi tylko rezerwacje dla swojej specjalizacji medycznej
+        if (currentEmployeeSpecialty.HasValue)
+        {
+            var reservations = await ReservationService.GetReservationsBySpecialtyAsync(currentEmployeeSpecialty.Value);
+            allReservations = reservations.ToList();
+        }
+        else
+        {
+            // Jeśli pracownik nie ma przypisanej specjalizacji, nie pokazuj rezerwacji
+            allReservations = new List<Reservation>();
+        }
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (allReservations == null)
+        {
+            filteredReservations = new List<Reservation>();
+            return;
+        }
+
+        var filtered = allReservations.AsEnumerable();
+
+        // Filter by search query (name, email, phone)
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var query = searchQuery.ToLowerInvariant();
+            filtered = filtered.Where(r =>
+                (r.Name != null && r.Name.ToLowerInvariant().Contains(query)) ||
+                (r.Email != null && r.Email.ToLowerInvariant().Contains(query)) ||
+                (r.PhoneNumber != null && r.PhoneNumber.Contains(query))
+            );
+        }
+
+        // Filter by medical specialty
+        if (!string.IsNullOrEmpty(selectedMedicalSpecialty))
+        {
+            filtered = filtered.Where(r => r.MedicalSpecialty.ToString() == selectedMedicalSpecialty);
+        }
+
+        // Filter by date range
+        if (filterFromDate.HasValue)
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime.Date >= filterFromDate.Value.Date);
+        }
+
+        if (filterToDate.HasValue)
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime.Date <= filterToDate.Value.Date);
+        }
+
+        // Filter by time (upcoming/past/today)
+        if (timeFilter == "upcoming")
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime > DateTime.Now);
+        }
+        else if (timeFilter == "past")
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime <= DateTime.Now);
+        }
+        else if (timeFilter == "today")
+        {
+            filtered = filtered.Where(r => r.ReservationDateTime.Date == DateTime.Today);
+        }
+
+        filteredReservations = filtered.ToList();
+    }
+
+    private void ShowCancelConfirmation(Reservation reservation)
+    {
+        reservationToCancel = reservation;
+        showCancelModal = true;
+    }
+
+    private void CloseCancelModal()
+    {
+        showCancelModal = false;
+        reservationToCancel = null;
+    }
+
+    private async Task ConfirmCancelReservation()
+    {
+        if (reservationToCancel == null || string.IsNullOrEmpty(currentDoctorId))
+            return;
+
+        isCancelling = true;
+        
+        try
+        {
+            // Przekazujemy userId, aby serwis mógł sprawdzić rolę i pominąć limit 12h dla Employee
+            if (await ReservationService.DeleteAsync(reservationToCancel.Id, currentDoctorId))
+            {
+                await LoadReservations();
+                CloseCancelModal();
+            }
+        }
+        catch
+        {
+            // Re-throw to show error to user
+            throw;
+        }
+        finally
+        {
+            isCancelling = false;
+        }
+    }
+}
+
