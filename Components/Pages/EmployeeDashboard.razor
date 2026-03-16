@@ -121,7 +121,7 @@
             <div class="row mb-3">
                 <div class="col-md-3">
                     <label class="form-label">Filtruj według Specjalisty</label>
-                    <select class="form-select" @bind="selectedMedicalSpecialty" @bind:after="ApplyFilters">
+                    <select class="form-select" @bind="selectedSpecialty" @bind:after="ApplyFilters">
                         <option value="">Wszystkie (moja specjalizacja)</option>
                         @if (currentEmployeeSpecialty.HasValue)
                         {
@@ -361,7 +361,7 @@
     private List<Reservation>? filteredReservations;
     
     private string searchQuery = "";
-    private string selectedMedicalSpecialty = "";
+    private string selectedSpecialty = "";
     private DateTime? filterFromDate;
     private DateTime? filterToDate;
     private string timeFilter = "all";
@@ -558,9 +558,9 @@
         }
 
         // Filter by medical specialty
-        if (!string.IsNullOrEmpty(selectedMedicalSpecialty))
+        if (!string.IsNullOrEmpty(selectedSpecialty))
         {
-            filtered = filtered.Where(r => r.MedicalSpecialty.ToString() == selectedMedicalSpecialty);
+            filtered = filtered.Where(r => r.MedicalSpecialty.ToString() == selectedSpecialty);
         }
 
         // Filter by date range

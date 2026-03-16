@@ -21,7 +21,7 @@
                 <div class="col-lg-6">
                     <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">Make a Reservation</h5>
+                            <h5 class="mb-0">Umów wizytę</h5>
                         </div>
                         <div class="card-body">
                             @if (!string.IsNullOrEmpty(errorMessage))
@@ -39,7 +39,7 @@
 
                                 <div class="mb-3">
                                     <label class="form-label">Specjalista *</label>
-                                    <InputSelect class="form-select" @bind-Value="bookingModel.MedicalSpecialty" @bind-Value:after="OnSpecialtyChanged">
+                                    <InputSelect class="form-select" @bind-Value="bookingModel.Specialty" @bind-Value:after="OnSpecialtyChanged">
                                         <option value="">-- Wybierz Specjalistę --</option>
                                         @foreach (var specialty in Enum.GetValues<MedicalSpecialty>())
                                         {
@@ -49,7 +49,7 @@
                                     <small class="form-text text-muted">Najpierw wybierz specjalistę, aby zobaczyć dostępne terminy</small>
                                 </div>
 
-                                @if (!string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+                                @if (!string.IsNullOrEmpty(bookingModel.Specialty))
                                 {
                                     <div class="mb-3">
                                         <label class="form-label">Wybierz Datę</label>
@@ -104,13 +104,13 @@
 
                                     <div class="mb-3">
                                         <label class="form-label">Email</label>
-                                        <InputText class="form-control" type="email" @bind-Value="bookingModel.Email" placeholder="twoj.email@example.com" />
+                                        <InputText class="form-control" type="email" @bind-Value="bookingModel.Email" placeholder="twoj.email@przyklad.pl" />
                                         <small class="form-text text-muted">Wypełnione automatycznie z profilu</small>
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="form-label">Numer Telefonu</label>
-                                        <InputText class="form-control" @bind-Value="bookingModel.PhoneNumber" placeholder="+48123456789" />
+                                        <InputText class="form-control" @bind-Value="bookingModel.PhoneNumber" placeholder="123456789" />
                                         <small class="form-text text-muted">Wypełnione automatycznie z profilu</small>
                                     </div>
 
@@ -250,13 +250,13 @@
 
     private async Task LoadAvailableSlots()
     {
-        if (string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+        if (string.IsNullOrEmpty(bookingModel.Specialty))
         {
             availableSlots = new List<DateTime>();
             return;
         }
 
-        var specialty = Enum.Parse<MedicalSpecialty>(bookingModel.MedicalSpecialty);
+        var specialty = Enum.Parse<MedicalSpecialty>(bookingModel.Specialty);
         availableSlots = await ReservationService.GetAvailableTimeSlotsAsync(bookingModel.SelectedDate, specialty);
     }
 
@@ -304,7 +304,7 @@
                 return;
             }
 
-            if (string.IsNullOrEmpty(bookingModel.MedicalSpecialty))
+            if (string.IsNullOrEmpty(bookingModel.Specialty))
             {
                 errorMessage = "Proszę wybrać specjalistę.";
                 return;
@@ -317,7 +317,7 @@
                 Email = bookingModel.Email,
                 PhoneNumber = bookingModel.PhoneNumber,
                 ReservationDateTime = bookingModel.SelectedSlot.Value,
-                MedicalSpecialty = Enum.Parse<MedicalSpecialty>(bookingModel.MedicalSpecialty),
+                MedicalSpecialty = Enum.Parse<MedicalSpecialty>(bookingModel.Specialty),
                 Notes = bookingModel.Notes
             };
 
@@ -361,7 +361,7 @@
     {
         public DateTime SelectedDate { get; set; }
         public DateTime? SelectedSlot { get; set; }
-        public string MedicalSpecialty { get; set; } = string.Empty;
+        public string Specialty { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;

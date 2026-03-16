@@ -52,7 +52,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">type konta</label>
+                        <label class="form-label">Typ konta</label>
                         <InputSelect class="form-select" @bind-Value="model.Role">
                             <option value="Customer">Klient</option>
                             <option value="Admin">Administrator</option>
@@ -94,7 +94,7 @@
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        Register
+                        Zarejestruj się
                     </button>
                 </EditForm>
 
@@ -124,7 +124,7 @@
                 var adminKey = Configuration["AdminSettings:RegistrationKey"];
                 if (string.IsNullOrEmpty(model.AdminKey) || model.AdminKey != adminKey)
                 {
-                    errorMessage = "Invalid admin registration key.";
+                    errorMessage = "Nieprawidłowy klucz rejestracji administratora.";
                     return;
                 }
             }
@@ -135,13 +135,13 @@
                 var employeeKey = Configuration["EmployeeSettings:RegistrationKey"];
                 if (string.IsNullOrEmpty(model.EmployeeKey) || model.EmployeeKey != employeeKey)
                 {
-                    errorMessage = "Invalid employee registration key.";
+                    errorMessage = "Nieprawidłowy klucz rejestracji pracownika.";
                     return;
                 }
                 
                 if (!model.EmployeeMedicalSpecialty.HasValue)
                 {
-                    errorMessage = "Medical specialty is required for employee registration.";
+                    errorMessage = "Specjalizacja jest wymagana podczas rejestracji pracownika.";
                     return;
                 }
             }

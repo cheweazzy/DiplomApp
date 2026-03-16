@@ -38,7 +38,7 @@ namespace DiplomApp.Services
             // Validate time slot (30-minute slots)
             if (!TimeSlotHelper.IsValid30MinuteTimeSlot(reservation.ReservationDateTime))
             {
-                throw new InvalidOperationException("Invalid time slot. Please select a valid 30-minute time slot between 8:00 AM and 7:30 PM.");
+                throw new InvalidOperationException("Nieprawidłowy przedział czasowy. Wybierz poprawny 30‑minutowy termin między 08:00 a 19:30.");
             }
 
             var now = DateTime.Now;

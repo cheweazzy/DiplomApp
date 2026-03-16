@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using DiplomApp.Models;
+using System;
 
 namespace DiplomApp.Controllers
 {
@@ -30,7 +31,8 @@ namespace DiplomApp.Controllers
             }
 
             // Redirect back to login page with error
-            return Redirect($"/login?error=Invalid login attempt");
+            var error = Uri.EscapeDataString("Nieprawidłowy email lub hasło");
+            return Redirect($"/login?error={error}");
         }
 
         [HttpPost]

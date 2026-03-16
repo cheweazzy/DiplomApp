@@ -4,18 +4,18 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject NavigationManager NavigationManager
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Logowanie</PageTitle>
 
 <div class="row justify-content-center">
     <div class="col-md-5">
         <div class="card">
             <div class="card-body">
-                <h3 class="card-title text-center mb-4">Login</h3>
+                <h3 class="card-title text-center mb-4">Logowanie</h3>
 
                 @if (showRegistrationSuccess)
                 {
                     <div class="alert alert-success">
-                        <strong>Registration successful!</strong> Please login with your credentials.
+                        <strong>Rejestracja zakończona sukcesem!</strong> Zaloguj się, używając swoich danych.
                     </div>
                 }
 
@@ -27,28 +27,28 @@
                 <form method="post" action="/account/login">
                     <div class="mb-3">
                         <label class="form-label">Email</label>
-                        <input type="email" class="form-control" name="email" value="@emailFromRegistration" placeholder="your.email@example.com" required />
+                        <input type="email" class="form-control" name="email" value="@emailFromRegistration" placeholder="twoj.email@przyklad.pl" required />
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-control" name="password" placeholder="Enter password" required />
+                        <label class="form-label">Hasło</label>
+                        <input type="password" class="form-control" name="password" placeholder="Wpisz hasło" required />
                     </div>
 
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" name="rememberMe" id="rememberMe" />
                         <label class="form-check-label" for="rememberMe">
-                            Remember me
+                            Zapamiętaj mnie
                         </label>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100">
-                        Login
+                        Zaloguj się
                     </button>
                 </form>
 
                 <div class="text-center mt-3">
-                    <p>Don't have an account? <a href="/register">Register here</a></p>
+                    <p>Nie masz konta? <a href="/register">Zarejestruj się</a></p>
                 </div>
             </div>
         </div>

@@ -50,7 +50,7 @@ namespace DiplomApp.Services
             var invalidSlots = availableSlots.Where(s => !validSlots.Contains(s)).ToList();
             if (invalidSlots.Any())
             {
-                throw new ArgumentException($"Invalid time slots: {string.Join(", ", invalidSlots)}");
+                throw new ArgumentException($"Nieprawidłowe terminy: {string.Join(", ", invalidSlots)}");
             }
 
             var existing = await context.DoctorAvailabilities

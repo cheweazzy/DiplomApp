@@ -10,7 +10,7 @@ namespace DiplomApp.Models
         public string FullName { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Email is required")]
-        [EmailAddress(ErrorMessage = "Invalid email format")]
+        [EmailAddress(ErrorMessage = "Nieprawidłowy format adresu e-mail")]
         [Display(Name = "Email")]
         public string Email { get; set; } = string.Empty;
 
