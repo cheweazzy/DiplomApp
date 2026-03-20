@@ -23,7 +23,7 @@ namespace DiplomApp.Services
             // Skip sending email if no email address is provided
             if (string.IsNullOrWhiteSpace(reservation.Email))
             {
-                _logger.LogWarning("Cannot send confirmation email for reservation {ReservationId}: no email address provided", reservation.Id);
+                _logger.LogWarning("Nie można wysłać potwierdzenia rezerwacji dla rezerwacji {ReservationId}: brak adresu email", reservation.Id);
                 return;
             }
 
@@ -40,7 +40,7 @@ namespace DiplomApp.Services
                 // Validate required settings
                 if (string.IsNullOrWhiteSpace(smtpHost) || string.IsNullOrWhiteSpace(smtpUsername) || string.IsNullOrWhiteSpace(smtpPassword))
                 {
-                    _logger.LogWarning("Email settings not configured. Skipping email send for reservation {ReservationId}", reservation.Id);
+                    _logger.LogWarning("Ustawienia emaila nie są skonfigurowane. Pomijanie wysyłania emaila dla rezerwacji {ReservationId}", reservation.Id);
                     return;
                 }
 
@@ -62,12 +62,12 @@ namespace DiplomApp.Services
                 await client.SendAsync(message, cancellationToken);
                 await client.DisconnectAsync(true, cancellationToken);
 
-                _logger.LogInformation("Confirmation email sent successfully for reservation {ReservationId} to {Email}", 
+                _logger.LogInformation("Potwierdzenie emaila wysłane pomyślnie dla rezerwacji {ReservationId} do {Email}", 
                     reservation.Id, reservation.Email);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending confirmation email for reservation {ReservationId} to {Email}", 
+                _logger.LogError(ex, "Błąd podczas wysyłania potwierdzenia emaila dla rezerwacji {ReservationId} do {Email}", 
                     reservation.Id, reservation.Email);
                 // Don't throw - we don't want email failures to break the reservation process
             }

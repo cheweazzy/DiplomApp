@@ -4,40 +4,40 @@ namespace DiplomApp.Models
 {
     public class RegisterModel
     {
-        [Required(ErrorMessage = "Full Name is required")]
-        [Display(Name = "Full Name")]
-        [FullNameValidation(ErrorMessage = "Full Name must consist of exactly two words (first name and last name)")]
+        [Required(ErrorMessage = "Imię i nazwisko są wymagane")]
+        [Display(Name = "Imię i Nazwisko")]
+        [FullNameValidation(ErrorMessage = "Imię i nazwisko musi składać się z dokładnie dwóch słów (imię i nazwisko)")]
         public string FullName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Email is required")]
+        [Required(ErrorMessage = "Adres email jest wymagany")]
         [EmailAddress(ErrorMessage = "Nieprawidłowy format adresu e-mail")]
         [Display(Name = "Email")]
         public string Email { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Phone Number is required")]
-        [Display(Name = "Phone Number")]
-        [PolishPhoneNumberValidation(ErrorMessage = "Phone number must be exactly 9 digits (Polish format)")]
+        [Required(ErrorMessage = "Numer telefonu jest wymagany")]
+        [Display(Name = "Numer Telefonu")]
+        [PolishPhoneNumberValidation(ErrorMessage = "Numer telefonu musi składać się z dokładnie 9 cyfr (format polskie)")]
         public string PhoneNumber { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Password is required")]
-        [Display(Name = "Password")]
-        [PasswordValidation(ErrorMessage = "Password must be at least 8 characters long, contain at least one uppercase letter, one digit, and one special character")]
+        [Required(ErrorMessage = "Hasło jest wymagane")]
+        [Display(Name = "Hasło")]
+        [PasswordValidation(ErrorMessage = "Hasło musi składać się z co najmniej 8 znaków, zawierać co najmniej jedną dużą literę, jedną cyfrę i jeden znak specjalny")]
         public string Password { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Confirm Password is required")]
-        [Display(Name = "Confirm Password")]
-        [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]
+        [Required(ErrorMessage = "Potwierdzenie hasła jest wymagane")]
+        [Display(Name = "Potwierdzenie Hasła")]
+        [Compare(nameof(Password), ErrorMessage = "Hasła nie pasują")]
         public string ConfirmPassword { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Account Type is required")]
-        [Display(Name = "Account Type")]
+        [Required(ErrorMessage = "Typ konta jest wymagany")]
+        [Display(Name = "Typ Konta")]
         public string Role { get; set; } = "Customer";
 
         public string? AdminKey { get; set; }
         
         public string? EmployeeKey { get; set; }
         
-        [Display(Name = "Medical Specialty")]
+        [Display(Name = "Specjalizacja Pracownika")]
         public MedicalSpecialty? EmployeeMedicalSpecialty { get; set; }
     }
 

@@ -249,36 +249,35 @@ internal static class TimeSlotHelperTestsHelpers
     public static DateTime GetValidSlotWithinNextThirtyMinutes()
     {
         var now = DateTime.Now;
+        // Bierzemy slot 10 minut do przodu i wyrównujemy W DÓŁ do 30-minutowego kroku
         var candidate = now.AddMinutes(10);
-        candidate = AlignToValidSlot(candidate);
-
-        // Ensure we are still within the next 30 minutes; if not, step back to force the rule
+        candidate = AlignToValidSlotDown(candidate);
+        // Jeśli nadal jest dalej niż 30 minut w przód, cofamy się o 30 minut
         if (candidate > now.AddMinutes(30))
         {
-            candidate = now.AddMinutes(20);
-            candidate = AlignToValidSlot(candidate);
+            candidate = candidate.AddMinutes(-30);
         }
-
+        // I jeszcze raz upewniamy się, że to poprawny slot wg logiki aplikacji
+        while (!TimeSlotHelper.IsValid30MinuteTimeSlot(candidate))
+        {
+            candidate = candidate.AddMinutes(-30);
+        }
         return candidate;
     }
-
     public static DateTime GetValidFutureSlot(TimeSpan offset)
     {
         var candidate = DateTime.Now.Add(offset);
-        candidate = AlignToValidSlot(candidate);
+        candidate = AlignToValidSlotDown(candidate);
+        while (!TimeSlotHelper.IsValid30MinuteTimeSlot(candidate))
+        {
+            candidate = candidate.AddMinutes(30);
+        }
         return candidate;
     }
-
-    private static DateTime AlignToValidSlot(DateTime value)
+    private static DateTime AlignToValidSlotDown(DateTime value)
     {
         var minute = value.Minute >= 30 ? 30 : 0;
-        var aligned = new DateTime(value.Year, value.Month, value.Day, value.Hour, minute, 0);
-
-        while (!TimeSlotHelper.IsValid30MinuteTimeSlot(aligned))
-        {
-            aligned = aligned.AddMinutes(30);
-        }
-
-        return aligned;
+        // NIE idziemy w przyszłość godzinami — tylko ustawiamy na 00 lub 30 tej samej godziny
+        return new DateTime(value.Year, value.Month, value.Day, value.Hour, minute, 0);
     }
 }

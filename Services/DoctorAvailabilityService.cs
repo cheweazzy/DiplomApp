@@ -96,7 +96,7 @@ namespace DiplomApp.Services
 
             context.DoctorAvailabilities.Remove(availability);
             await context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Deleted availability for doctor {DoctorId} on {Date}", doctorId, date.Date);
+            _logger.LogInformation("Usunięto dostępność dla lekarza {DoctorId} na dzień {Date}", doctorId, date.Date);
             return true;
         }
 
