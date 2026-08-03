@@ -349,7 +349,7 @@
     private IReservationService ReservationService { get; set; } = default!;
 
     [Inject]
-    private IDoctorAvailabilityService DoctorAvailabilityService { get; set; } = default!;
+    private IAvailabilityService DoctorAvailabilityService { get; set; } = default!;
 
     [Inject]
     private UserManager<User> UserManager { get; set; } = default!;

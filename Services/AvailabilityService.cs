@@ -3,38 +3,33 @@ using DiplomApp.Data;
 using DiplomApp.Helpers;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace DiplomApp.Services
 {
-    public class DoctorAvailabilityService : IDoctorAvailabilityService
+    public class AvailabilityService : IAvailabilityService
     {
-        private readonly IServiceScopeFactory _scopeFactory;
-        private readonly ILogger<DoctorAvailabilityService> _logger;
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<AvailabilityService> _logger;
 
-        public DoctorAvailabilityService(
-            IServiceScopeFactory scopeFactory,
-            ILogger<DoctorAvailabilityService> logger)
+        public AvailabilityService(
+            ApplicationDbContext context,
+            ILogger<AvailabilityService> logger)
         {
-            _scopeFactory = scopeFactory;
+            _context = context;
             _logger = logger;
         }
 
         public async Task<DoctorAvailability?> GetAvailabilityAsync(string doctorId, DateTime date, CancellationToken cancellationToken = default)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            return await context.DoctorAvailabilities
+            return await _context.DoctorAvailabilities
                 .FirstOrDefaultAsync(da => da.DoctorId == doctorId && da.Date.Date == date.Date, cancellationToken);
         }
 
         public async Task<List<DoctorAvailability>> GetAvailabilitiesAsync(string doctorId, DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            return await context.DoctorAvailabilities
+            return await _context.DoctorAvailabilities
                 .Where(da => da.DoctorId == doctorId && da.Date.Date >= fromDate.Date && da.Date.Date <= toDate.Date)
                 .OrderBy(da => da.Date)
                 .ToListAsync(cancellationToken);
@@ -42,8 +37,6 @@ namespace DiplomApp.Services
 
         public async Task<DoctorAvailability> SaveAvailabilityAsync(string doctorId, DateTime date, List<int> availableSlots, CancellationToken cancellationToken = default)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             // Validate slots are valid 30-minute intervals
             var validSlots = TimeSlotHelper.GetAll30MinuteSlotMinutes();
@@ -53,7 +46,7 @@ namespace DiplomApp.Services
                 throw new ArgumentException($"Nieprawidłowe terminy: {string.Join(", ", invalidSlots)}");
             }
 
-            var existing = await context.DoctorAvailabilities
+            var existing = await _context.DoctorAvailabilities
                 .FirstOrDefaultAsync(da => da.DoctorId == doctorId && da.Date.Date == date.Date, cancellationToken);
 
             var slotsJson = JsonSerializer.Serialize(availableSlots.OrderBy(s => s).ToList());
@@ -62,7 +55,7 @@ namespace DiplomApp.Services
             {
                 existing.AvailableSlots = slotsJson;
                 existing.UpdatedAt = DateTime.UtcNow;
-                await context.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation("Updated availability for doctor {DoctorId} on {Date}", doctorId, date.Date);
                 return existing;
             }
@@ -76,8 +69,8 @@ namespace DiplomApp.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                context.DoctorAvailabilities.Add(availability);
-                await context.SaveChangesAsync(cancellationToken);
+                _context.DoctorAvailabilities.Add(availability);
+                await _context.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation("Created availability for doctor {DoctorId} on {Date}", doctorId, date.Date);
                 return availability;
             }
@@ -85,17 +78,15 @@ namespace DiplomApp.Services
 
         public async Task<bool> DeleteAvailabilityAsync(string doctorId, DateTime date, CancellationToken cancellationToken = default)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var availability = await context.DoctorAvailabilities
+            var availability = await _context.DoctorAvailabilities
                 .FirstOrDefaultAsync(da => da.DoctorId == doctorId && da.Date.Date == date.Date, cancellationToken);
 
             if (availability == null)
                 return false;
 
-            context.DoctorAvailabilities.Remove(availability);
-            await context.SaveChangesAsync(cancellationToken);
+            _context.DoctorAvailabilities.Remove(availability);
+            await _context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Usunięto dostępność dla lekarza {DoctorId} na dzień {Date}", doctorId, date.Date);
             return true;
         }

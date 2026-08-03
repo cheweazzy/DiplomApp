@@ -12,12 +12,12 @@ namespace DiplomApp.Services
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<DatabaseReservationService> _logger;
-        private readonly IDoctorAvailabilityService _doctorAvailabilityService;
+        private readonly IAvailabilityService _doctorAvailabilityService;
 
         public DatabaseReservationService(
             IServiceScopeFactory scopeFactory,
             ILogger<DatabaseReservationService> logger,
-            IDoctorAvailabilityService doctorAvailabilityService)
+            IAvailabilityService doctorAvailabilityService)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;

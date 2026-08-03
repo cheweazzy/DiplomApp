@@ -2,7 +2,7 @@ using DiplomApp.Models;
 
 namespace DiplomApp.Services
 {
-    public interface IDoctorAvailabilityService
+    public interface IAvailabilityService
     {
         Task<DoctorAvailability?> GetAvailabilityAsync(string doctorId, DateTime date, CancellationToken cancellationToken = default);
         Task<List<DoctorAvailability>> GetAvailabilitiesAsync(string doctorId, DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default);
